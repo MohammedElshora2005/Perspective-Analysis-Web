@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single View Geometry | Vanishing Points & Horizon Line Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🎯 Single View Geometry</h1>
+            <p>Vanishing Points · Vanishing Line · Horizon Line Analyzer</p>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Upload Section -->
+            <div class="card upload-card">
+                <div class="card-header">
+                    <span class="icon">📸</span>
+                    <h2>Image Upload</h2>
+                </div>
+                
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p>Drag & Drop or Click to Upload</p>
+                    <small>PNG, JPG, JPEG, BMP (Max 16MB)</small>
+                    <input type="file" id="fileInput" accept="image/*" hidden>
+                </div>
+
+                <!-- Perspective Type Selection -->
+                <div class="perspective-selector">
+                    <label>Perspective Type:</label>
+                    <div class="button-group">
+                        <button class="perspective-btn" data-type="1">
+                            <span>1️⃣</span> 1-Point
+                            <small>Corridor, Road</small>
+                        </button>
+                        <button class="perspective-btn active" data-type="2">
+                            <span>2️⃣</span> 2-Point
+                            <small>Building Corner</small>
+                        </button>
+                        <button class="perspective-btn" data-type="3">
+                            <span>3️⃣</span> 3-Point
+                            <small>Tall Building</small>
+                        </button>
+                    </div>
+                </div>
+
+                <button class="btn-analyze" id="analyzeBtn" disabled>
+                    <span>🔍</span> Analyze Perspective
+                </button>
+            </div>
+
+            <!-- Preview Section -->
+            <div class="card preview-card" id="previewCard" style="display: none;">
+                <div class="card-header">
+                    <span class="icon">🖼️</span>
+                    <h2>Image Preview</h2>
+                </div>
+                <div class="preview-container">
+                    <img id="previewImage" alt="Preview">
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <div class="card result-card">
+                <div class="card-header">
+                    <span class="icon">📊</span>
+                    <h2>Analysis Results</h2>
+                </div>
+                
+                <!-- Info Panel -->
+                <div class="info-panel" id="infoPanel"></div>
+
+                <!-- Result Image -->
+                <div class="result-image-container">
+                    <img id="resultImage" alt="Result">
+                    <button class="btn-download" id="downloadBtn">
+                        ⬇️ Download Result
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="spinner"></div>
+            <p>Analyzing perspective...</p>
+            <small>Computing vanishing points and horizon line</small>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
