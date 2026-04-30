@@ -9,17 +9,25 @@ import json
 import traceback
 import re
 
+# Get the absolute path of the current directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Add analyzers to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+
+# Use relative paths based on BASE_DIR
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+RESULT_FOLDER = os.path.join(BASE_DIR, 'static', 'results')
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max
 app.config['SECRET_KEY'] = 'single_view_geometry_secret'
 
 # Create folders if not exist
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs('static/results', exist_ok=True)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(RESULT_FOLDER, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'bmp', 'tiff'}
 
@@ -47,7 +55,7 @@ def clean_filename_util(filename):
 
 def analyze_1point(image_path):
     """Run 1-point perspective analysis"""
-    result_path = 'static/results/1point_result.png'
+    result_path = os.path.join(RESULT_FOLDER, '1point_result.png')
     
     try:
         import analyzers.vp_1point as vp1
@@ -63,12 +71,14 @@ def analyze_1point(image_path):
         
         if vp_info:
             vp1.visualize_1point(img, lines, vp_info, result_path)
+            # Return relative path for web access
+            web_result_path = 'static/results/1point_result.png'
             return {
                 'vanishing_points': [{'x': int(vp_info['point'][0]), 'y': int(vp_info['point'][1]), 'confidence': vp_info['num_intersections']}],
                 'perspective_type': '1-Point Perspective',
                 'horizon_line': None,
                 'num_lines': len(lines)
-            }, result_path
+            }, web_result_path
         return None, "Could not find vanishing point"
     except Exception as e:
         print(f"Error in 1-point analysis: {str(e)}")
@@ -77,7 +87,7 @@ def analyze_1point(image_path):
 
 def analyze_2point(image_path):
     """Run 2-point perspective analysis"""
-    result_path = 'static/results/2point_result.png'
+    result_path = os.path.join(RESULT_FOLDER, '2point_result.png')
     
     try:
         import analyzers.vp_2point as vp2
@@ -102,6 +112,7 @@ def analyze_2point(image_path):
             
             slope_val = (vp_right_pt[1] - vp_left_pt[1]) / (vp_right_pt[0] - vp_left_pt[0] + 1e-6)
             
+            web_result_path = 'static/results/2point_result.png'
             return {
                 'vanishing_points': [
                     {'x': int(vp_left_pt[0]), 'y': int(vp_left_pt[1]), 'confidence': vp_left['size'], 'label': 'Left VP'},
@@ -112,7 +123,7 @@ def analyze_2point(image_path):
                     'slope': round(slope_val, 4)
                 },
                 'num_lines': len(pos_lines) + len(neg_lines)
-            }, result_path
+            }, web_result_path
         return None, "Could not find both vanishing points"
     except Exception as e:
         print(f"Error in 2-point analysis: {str(e)}")
@@ -121,7 +132,7 @@ def analyze_2point(image_path):
 
 def analyze_3point(image_path):
     """Run 3-point perspective analysis"""
-    result_path = 'static/results/3point_result.png'
+    result_path = os.path.join(RESULT_FOLDER, '3point_result.png')
     
     try:
         import analyzers.vp_3point as vp3
@@ -147,6 +158,8 @@ def analyze_3point(image_path):
         if vp_vertical:
             vps.append(vp_vertical)
         
+        web_result_path = 'static/results/3point_result.png'
+        
         if len(vps) >= 3:
             vps.sort(key=lambda v: v['point'][0])
             vp3.visualize_3point(img, all_lines, vps, result_path)
@@ -159,7 +172,7 @@ def analyze_3point(image_path):
                 ],
                 'perspective_type': '3-Point Perspective',
                 'num_lines': len(all_lines)
-            }, result_path
+            }, web_result_path
         elif len(vps) == 2:
             vp3.visualize_3point(img, all_lines, vps, result_path)
             return {
@@ -169,7 +182,7 @@ def analyze_3point(image_path):
                 ],
                 'perspective_type': '2-Point Perspective (3-point analysis attempted)',
                 'num_lines': len(all_lines)
-            }, result_path
+            }, web_result_path
         return None, f"Could not find sufficient vanishing points (found {len(vps)} clusters, need at least 2)"
     except Exception as e:
         print(f"Error in 3-point analysis: {str(e)}")
@@ -220,7 +233,7 @@ def upload_file():
     # Save uploaded file
     try:
         filename = secure_filename(clean_name)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
         print(f"✅ File saved to: {filepath}")
     except Exception as e:
@@ -263,11 +276,16 @@ def upload_file():
 
 @app.route('/static/<path:path>')
 def serve_static(path):
-    return send_file(os.path.join('static', path))
+    file_path = os.path.join(BASE_DIR, 'static', path)
+    return send_file(file_path)
 
 if __name__ == '__main__':
     print("\n" + "="*50)
     print("🎯 SINGLE VIEW GEOMETRY WEB APP")
+    print("="*50)
+    print(f"📁 Base directory: {BASE_DIR}")
+    print(f"📁 Upload folder: {UPLOAD_FOLDER}")
+    print(f"📁 Results folder: {RESULT_FOLDER}")
     print("="*50)
     print("Server running at: http://127.0.0.1:5000")
     print("Press CTRL+C to stop")
