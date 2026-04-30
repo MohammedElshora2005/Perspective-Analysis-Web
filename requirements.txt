@@ -1,5 +1,5 @@
 flask==2.3.3
-opencv-python-headless==4.8.1.78   # بدل opencv-python العادية (أخف)
+opencv-python-headless==4.8.1.78
 numpy==1.24.3
 scikit-learn==1.3.0
 matplotlib==3.7.2
