@@ -6,7 +6,7 @@
       "use": "@vercel/python",
       "config": {
         "runtime": "python3.9",
-        "maxLambdaSize": "15mb"
+        "maxLambdaSize": "50mb"
       }
     },
     {
@@ -20,8 +20,18 @@
       "dest": "/static/$1"
     },
     {
+      "src": "/result_image/(.*)",
+      "dest": "app.py"
+    },
+    {
       "src": "/(.*)",
       "dest": "app.py"
     }
-  ]
+  ],
+  "functions": {
+    "app.py": {
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  }
 }
