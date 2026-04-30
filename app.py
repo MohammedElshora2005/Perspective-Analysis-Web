@@ -9,17 +9,29 @@ import json
 import traceback
 import re
 
+# ============================================
+# VERCEL SPECIFIC CONFIGURATION
+# ============================================
 # Get the absolute path of the current directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Add analyzers to path
 sys.path.insert(0, BASE_DIR)
 
+# Vercel specific: Detect if running on Vercel
+IS_VERCEL = os.environ.get('VERCEL', False) or os.environ.get('NOW_REGION', False)
+
 app = Flask(__name__)
 
-# Use relative paths based on BASE_DIR
-UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
-RESULT_FOLDER = os.path.join(BASE_DIR, 'static', 'results')
+# Use appropriate paths for Vercel
+if IS_VERCEL:
+    # On Vercel, use /tmp for uploads (writable directory)
+    UPLOAD_FOLDER = '/tmp/uploads'
+    RESULT_FOLDER = '/tmp/results'
+else:
+    # Local development
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+    RESULT_FOLDER = os.path.join(BASE_DIR, 'static', 'results')
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max
@@ -43,19 +55,21 @@ def allowed_file(filename):
 
 def clean_filename_util(filename):
     """Clean filename from unwanted characters"""
-    # Remove quotes
     filename = filename.strip().strip('"').strip("'")
-    # Remove any path characters
     filename = os.path.basename(filename)
-    # Replace spaces with underscores
     filename = filename.replace(' ', '_')
-    # Remove any non-alphanumeric except dot and underscore
     filename = re.sub(r'[^a-zA-Z0-9._-]', '', filename)
     return filename
 
 def analyze_1point(image_path):
     """Run 1-point perspective analysis"""
-    result_path = os.path.join(RESULT_FOLDER, '1point_result.png')
+    # Use /tmp for results on Vercel
+    if IS_VERCEL:
+        result_path = '/tmp/1point_result.png'
+        web_result_path = 'static/results/1point_result.png'  # This won't work on Vercel
+    else:
+        result_path = os.path.join(RESULT_FOLDER, '1point_result.png')
+        web_result_path = 'static/results/1point_result.png'
     
     try:
         import analyzers.vp_1point as vp1
@@ -71,8 +85,13 @@ def analyze_1point(image_path):
         
         if vp_info:
             vp1.visualize_1point(img, lines, vp_info, result_path)
-            # Return relative path for web access
-            web_result_path = 'static/results/1point_result.png'
+            
+            # On Vercel, need to serve image from /tmp
+            if IS_VERCEL:
+                web_result_path = f'/result_image/1point_result.png'
+            else:
+                web_result_path = 'static/results/1point_result.png'
+            
             return {
                 'vanishing_points': [{'x': int(vp_info['point'][0]), 'y': int(vp_info['point'][1]), 'confidence': vp_info['num_intersections']}],
                 'perspective_type': '1-Point Perspective',
@@ -87,7 +106,12 @@ def analyze_1point(image_path):
 
 def analyze_2point(image_path):
     """Run 2-point perspective analysis"""
-    result_path = os.path.join(RESULT_FOLDER, '2point_result.png')
+    if IS_VERCEL:
+        result_path = '/tmp/2point_result.png'
+        web_result_path = '/result_image/2point_result.png'
+    else:
+        result_path = os.path.join(RESULT_FOLDER, '2point_result.png')
+        web_result_path = 'static/results/2point_result.png'
     
     try:
         import analyzers.vp_2point as vp2
@@ -112,7 +136,6 @@ def analyze_2point(image_path):
             
             slope_val = (vp_right_pt[1] - vp_left_pt[1]) / (vp_right_pt[0] - vp_left_pt[0] + 1e-6)
             
-            web_result_path = 'static/results/2point_result.png'
             return {
                 'vanishing_points': [
                     {'x': int(vp_left_pt[0]), 'y': int(vp_left_pt[1]), 'confidence': vp_left['size'], 'label': 'Left VP'},
@@ -132,7 +155,12 @@ def analyze_2point(image_path):
 
 def analyze_3point(image_path):
     """Run 3-point perspective analysis"""
-    result_path = os.path.join(RESULT_FOLDER, '3point_result.png')
+    if IS_VERCEL:
+        result_path = '/tmp/3point_result.png'
+        web_result_path = '/result_image/3point_result.png'
+    else:
+        result_path = os.path.join(RESULT_FOLDER, '3point_result.png')
+        web_result_path = 'static/results/3point_result.png'
     
     try:
         import analyzers.vp_3point as vp3
@@ -157,8 +185,6 @@ def analyze_3point(image_path):
             vps.append(vp_right)
         if vp_vertical:
             vps.append(vp_vertical)
-        
-        web_result_path = 'static/results/3point_result.png'
         
         if len(vps) >= 3:
             vps.sort(key=lambda v: v['point'][0])
@@ -199,7 +225,6 @@ def upload_file():
     print("📤 UPLOAD REQUEST RECEIVED")
     print("="*50)
     
-    # Check if file exists
     if 'file' not in request.files:
         print("❌ Error: No file in request")
         return jsonify({'error': 'No file uploaded'}), 400
@@ -207,27 +232,22 @@ def upload_file():
     file = request.files['file']
     perspective_type = request.form.get('perspective_type', '2')
     
-    # Clean the filename using the utility function
     original_filename = file.filename
     clean_name = clean_filename_util(original_filename)
     
     print(f"📁 Original filename: {original_filename}")
     print(f"📁 Clean filename: {clean_name}")
     print(f"🎯 Perspective type: {perspective_type}")
+    print(f"📍 Platform: {'Vercel' if IS_VERCEL else 'Local'}")
     
     if not clean_name or clean_name == '':
-        print("❌ Error: Empty filename after cleaning")
         return jsonify({'error': 'Invalid filename'}), 400
     
-    # Check if file has extension
     if '.' not in clean_name:
-        print(f"❌ Error: No extension in filename: {clean_name}")
         return jsonify({'error': 'File has no extension. Please use a valid image file.'}), 400
     
-    # Check file extension
     if not allowed_file(clean_name):
         ext = clean_name.rsplit('.', 1)[1].lower() if '.' in clean_name else 'unknown'
-        print(f"❌ Error: Extension '{ext}' not allowed")
         return jsonify({'error': f'File type .{ext} not allowed. Allowed: png, jpg, jpeg, bmp, tiff'}), 400
     
     # Save uploaded file
@@ -240,7 +260,6 @@ def upload_file():
         print(f"❌ Error saving file: {str(e)}")
         return jsonify({'error': f'Error saving file: {str(e)}'}), 500
     
-    # Analyze based on perspective type
     print(f"\n🔍 Starting {perspective_type}-point analysis...")
     
     try:
@@ -251,7 +270,6 @@ def upload_file():
         elif perspective_type == '3':
             result, output_path = analyze_3point(filepath)
         else:
-            print(f"❌ Invalid perspective type: {perspective_type}")
             return jsonify({'error': 'Invalid perspective type. Use 1, 2, or 3'}), 400
         
         if result is None:
@@ -260,32 +278,46 @@ def upload_file():
         
         print(f"✅ Analysis successful!")
         print(f"📊 Result: {result.get('perspective_type')}")
-        print(f"📍 Found {len(result.get('vanishing_points', []))} vanishing points")
         print("="*50)
         
-        # Return results
         return jsonify({
             'success': True,
             'result_image': output_path,
             'data': result
         })
     except Exception as e:
-        print(f"❌ Unexpected error during analysis: {str(e)}")
+        print(f"❌ Unexpected error: {str(e)}")
         traceback.print_exc()
         return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
+@app.route('/result_image/<path:filename>')
+def serve_result_image(filename):
+    """Serve result images from /tmp on Vercel"""
+    if IS_VERCEL:
+        filepath = os.path.join('/tmp', filename)
+    else:
+        filepath = os.path.join(RESULT_FOLDER, filename)
+    
+    if os.path.exists(filepath):
+        return send_file(filepath)
+    else:
+        return jsonify({'error': 'Image not found'}), 404
+
 @app.route('/static/<path:path>')
 def serve_static(path):
-    file_path = os.path.join(BASE_DIR, 'static', path)
-    return send_file(file_path)
+    filepath = os.path.join(BASE_DIR, 'static', path)
+    if os.path.exists(filepath):
+        return send_file(filepath)
+    else:
+        return jsonify({'error': 'File not found'}), 404
 
 if __name__ == '__main__':
     print("\n" + "="*50)
     print("🎯 SINGLE VIEW GEOMETRY WEB APP")
     print("="*50)
+    print(f"📁 Platform: {'Vercel (Serverless)' if IS_VERCEL else 'Local Development'}")
     print(f"📁 Base directory: {BASE_DIR}")
     print(f"📁 Upload folder: {UPLOAD_FOLDER}")
-    print(f"📁 Results folder: {RESULT_FOLDER}")
     print("="*50)
     print("Server running at: http://127.0.0.1:5000")
     print("Press CTRL+C to stop")
